@@ -1,0 +1,26 @@
+{
+  "name": "google-data-scraper-flow",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Personal local-business lead generation engine built on Google Places API (New) + Maps JavaScript API",
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "node --watch --disable-warning=ExperimentalWarning server/index.js",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix client run build",
+    "start": "NODE_ENV=production node --disable-warning=ExperimentalWarning server/index.js",
+    "setup": "npm install && npm --prefix client install",
+    "reset-login": "node --disable-warning=ExperimentalWarning server/reset-login.js"
+  },
+  "engines": { "node": ">=22.13" },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "exceljs": "^4.4.0",
+    "express": "^5.1.0",
+    "libphonenumber-js": "^1.12.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
