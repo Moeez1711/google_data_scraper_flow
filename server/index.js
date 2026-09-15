@@ -24,9 +24,10 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   res.status(status).json({ error: err.message || 'Server error' });
 });
 
-// Bound to localhost: this is a personal tool and the server holds the Places API key.
-const server = app.listen(config.port, '127.0.0.1', () => {
-  console.log(`Lead Scout API on http://127.0.0.1:${config.port}`);
+// Listen on HOST or 0.0.0.0 for cloud deployment compatibility (e.g. Render, Railway, Docker)
+const host = process.env.HOST || '0.0.0.0';
+const server = app.listen(config.port, host, () => {
+  console.log(`Lead Scout API on http://${host}:${config.port}`);
   if (!config.placesKey) console.warn('⚠  GOOGLE_PLACES_API_KEY missing — add it to .env');
   kickSites(); // finish website analyses left pending by a previous run
 });
