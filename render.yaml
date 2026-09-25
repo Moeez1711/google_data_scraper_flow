@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: google-data-scraper-flow
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.14.0
+      - key: PORT
+        value: 10000
+      - key: GOOGLE_PLACES_API_KEY
+        sync: false
+      - key: VITE_GOOGLE_MAPS_JS_KEY
+        sync: false
+      - key: VITE_GOOGLE_MAP_ID
+        value: DEMO_MAP_ID
+      - key: PLACES_RPS
+        value: 5
+      - key: PLACES_COST_PER_1000
+        value: 35
+      - key: PLACES_CACHE_TTL_HOURS
+        value: 72
+      - key: WEBSITE_CONCURRENCY
+        value: 4
+      # Optional: set GOOGLE_SERVICE_ACCOUNT_JSON with your raw JSON key if using Google Sheets export
+      # - key: GOOGLE_SERVICE_ACCOUNT_JSON
+      #   sync: false
+      # Optional: if you upgrade to Starter plan ($7/mo) to persist SQLite data across restarts:
+      # - key: DB_PATH
+      #   value: /var/data/leads.db
+    # To enable disk persistence (requires Starter plan or higher):
+    # disk:
+    #   name: scraper-data
+    #   mountPath: /var/data
+    #   sizeGB: 1

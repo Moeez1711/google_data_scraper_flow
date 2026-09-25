@@ -14,6 +14,8 @@ import { authRouter } from '../auth.js';
 const api = Router();
 api.use('/auth', authRouter);
 
+api.get('/health', (req, res) => res.json({ ok: true, uptime: Math.floor(process.uptime()), timestamp: Date.now() }));
+
 api.get('/meta', (req, res) => res.json({
   countries, categories, tiers: TIERS, whatsappFirst: [...WHATSAPP_FIRST],
   placesKeyConfigured: Boolean(config.placesKey), costPer1000: config.placesCostPer1000,

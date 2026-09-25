@@ -9,6 +9,7 @@ import { kickSites } from './enrich/siteQueue.js';
 
 const app = express();
 app.disable('x-powered-by');
+app.set('trust proxy', 1);
 app.use(express.json({ limit: '2mb' }));
 app.use('/api', requireAuth, api);
 

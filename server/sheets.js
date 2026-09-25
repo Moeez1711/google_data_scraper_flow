@@ -14,6 +14,17 @@ let token;
 
 function serviceAccount() {
   if (account) return account;
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+    try {
+      account = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+      return account;
+    } catch {
+      try {
+        account = JSON.parse(Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_JSON, 'base64').toString('utf8'));
+        return account;
+      } catch {}
+    }
+  }
   const file = config.googleServiceAccountFile;
   if (!file || !fs.existsSync(file)) return null;
   account = JSON.parse(fs.readFileSync(file, 'utf8'));

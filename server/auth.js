@@ -98,13 +98,14 @@ function startSession(req, res, remember) {
   const now = Date.now();
   db.prepare('INSERT INTO sessions (token_hash, created_at, expires_at, last_seen, user_agent) VALUES (?,?,?,?,?)')
     .run(sha256(token), now, now + ttl, now, String(req.headers['user-agent'] || '').slice(0, 200));
-  res.append('Set-Cookie', `${COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${ttl / 1000}`);
+  const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  res.append('Set-Cookie', `${COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/${isSecure ? '; Secure' : ''}; Max-Age=${ttl / 1000}`);
 }
 
-const clearCookie = (res) => res.append('Set-Cookie', `${COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`);
+const clearCookie = (res) => res.append('Set-Cookie', `${COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`);
 const endOtherSessions = (req) => db.prepare('DELETE FROM sessions WHERE token_hash != ?').run(sha256(tokenFrom(req) || '')).changes;
 
-const OPEN_ROUTES = new Set(['GET /auth/status', 'POST /auth/login', 'POST /auth/setup']);
+const OPEN_ROUTES = new Set(['GET /health', 'GET /auth/status', 'POST /auth/login', 'POST /auth/setup']);
 
 /** Mounted on /api. Lets everything through while no login is configured. */
 export function requireAuth(req, res, next) {
