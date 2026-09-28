@@ -12,7 +12,9 @@
     "dev:server": "node --watch --disable-warning=ExperimentalWarning server/index.js",
     "dev:client": "npm --prefix client run dev",
     "build": "npm --prefix client install && npm --prefix client run build",
+    "build:client": "npm --prefix client install && npm --prefix client run build",
     "start": "NODE_ENV=production node --disable-warning=ExperimentalWarning server/index.js",
+    "start:server": "NODE_ENV=production node --disable-warning=ExperimentalWarning server/index.js",
     "setup": "npm install && npm --prefix client install",
     "reset-login": "node --disable-warning=ExperimentalWarning server/reset-login.js"
   },

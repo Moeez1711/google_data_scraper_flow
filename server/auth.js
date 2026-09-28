@@ -76,6 +76,20 @@ async function requireCurrentPassword(password) {
 }
 
 function tokenFrom(req) {
+  // 1. Authorization header (Bearer token)
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    return auth.slice(7).trim();
+  }
+  // 2. Custom header
+  if (req.headers['x-session-token']) {
+    return String(req.headers['x-session-token']).trim();
+  }
+  // 3. Query string token (for EventSource SSE)
+  if (req.query && req.query.token) {
+    return String(req.query.token).trim();
+  }
+  // 4. Cookie fallback
   for (const part of (req.headers.cookie || '').split(';')) {
     const [k, ...v] = part.trim().split('=');
     if (k === COOKIE) return v.join('=') || null;
@@ -99,7 +113,10 @@ function startSession(req, res, remember) {
   db.prepare('INSERT INTO sessions (token_hash, created_at, expires_at, last_seen, user_agent) VALUES (?,?,?,?,?)')
     .run(sha256(token), now, now + ttl, now, String(req.headers['user-agent'] || '').slice(0, 200));
   const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
-  res.append('Set-Cookie', `${COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/${isSecure ? '; Secure' : ''}; Max-Age=${ttl / 1000}`);
+  // Use SameSite=None on HTTPS for cross-origin compatibility (e.g. Hostinger -> Render)
+  const sameSite = isSecure ? 'None' : 'Lax';
+  res.append('Set-Cookie', `${COOKIE}=${token}; HttpOnly; SameSite=${sameSite}; Path=/${isSecure ? '; Secure' : ''}; Max-Age=${ttl / 1000}`);
+  return token;
 }
 
 const clearCookie = (res) => res.append('Set-Cookie', `${COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`);
@@ -133,8 +150,8 @@ authRouter.post('/setup', async (req, res) => {
   const passwordHash = await hashPassword(checkNewPassword(req.body?.password));
   writeAuth({ email, passwordHash, updatedAt: Date.now() });
   db.exec('DELETE FROM sessions');
-  startSession(req, res, true);
-  res.json({ ok: true });
+  const token = startSession(req, res, true);
+  res.json({ ok: true, token });
 });
 
 authRouter.post('/login', async (req, res) => {
@@ -146,8 +163,8 @@ authRouter.post('/login', async (req, res) => {
   const emailOk = String(req.body?.email || '').trim().toLowerCase() === auth.email;
   if (!passwordOk || !emailOk) { recordFailure(); throw httpErr(401, 'Email or password is incorrect'); }
   resetFailures();
-  startSession(req, res, req.body?.remember !== false);
-  res.json({ ok: true });
+  const token = startSession(req, res, req.body?.remember !== false);
+  res.json({ ok: true, token });
 });
 
 authRouter.post('/logout', (req, res) => {

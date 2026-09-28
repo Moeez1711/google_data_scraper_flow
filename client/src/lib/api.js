@@ -1,13 +1,42 @@
-async function request(method, url, body, { signal, raw } = {}) {
-  const res = await fetch(`/api${url}`, {
+const RAW_API_URL = import.meta.env.VITE_API_BASE_URL || '';
+export const API_BASE = RAW_API_URL.replace(/\/+$/, '');
+
+export function getSessionToken() {
+  try { return localStorage.getItem('ls_session_token') || null; } catch { return null; }
+}
+
+export function setSessionToken(token) {
+  try {
+    if (token) localStorage.setItem('ls_session_token', token);
+    else localStorage.removeItem('ls_session_token');
+  } catch { /* storage disabled or private mode */ }
+}
+
+async function request(method, url, body, { signal, raw, headers: extraHeaders } = {}) {
+  const token = getSessionToken();
+  const headers = {
+    ...(body ? { 'Content-Type': 'application/json' } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extraHeaders,
+  };
+
+  const path = url.startsWith('/') ? url : `/${url}`;
+  const targetUrl = `${API_BASE}/api${path}`;
+
+  const res = await fetch(targetUrl, {
     method,
     signal,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    headers: Object.keys(headers).length ? headers : undefined,
     body: body ? JSON.stringify(body) : undefined,
+    credentials: 'include',
   });
+
   if (!res.ok) {
     let payload = {};
     try { payload = await res.json(); } catch { /* not json */ }
+    if (res.status === 401) {
+      setSessionToken(null);
+    }
     throw Object.assign(new Error(payload.error || `Request failed (${res.status})`), { status: res.status, code: payload.code });
   }
   if (raw) return res;
@@ -31,7 +60,10 @@ export const qs = (obj) => {
 
 /** One shared EventSource; auto-reconnects (browser default). */
 export function subscribe(onEvent, onStatus) {
-  const es = new EventSource('/api/events');
+  const token = getSessionToken();
+  const query = token ? `?token=${encodeURIComponent(token)}` : '';
+  const eventsUrl = `${API_BASE}/api/events${query}`;
+  const es = new EventSource(eventsUrl, { withCredentials: true });
   es.onopen = () => onStatus?.(true);
   es.onerror = () => onStatus?.(false);
   es.onmessage = (m) => { try { onEvent(JSON.parse(m.data)); } catch { /* ignore */ } };

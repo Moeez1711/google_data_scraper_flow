@@ -4,7 +4,8 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: npm install && npm run build
+    # API-only build command: fast install of server dependencies
+    buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
@@ -14,10 +15,9 @@ services:
         value: 10000
       - key: GOOGLE_PLACES_API_KEY
         sync: false
-      - key: VITE_GOOGLE_MAPS_JS_KEY
-        sync: false
-      - key: VITE_GOOGLE_MAP_ID
-        value: DEMO_MAP_ID
+      # Allowed origins for CORS (e.g. your Hostinger domain https://example.com, or * for all)
+      - key: CORS_ORIGIN
+        value: '*'
       - key: PLACES_RPS
         value: 5
       - key: PLACES_COST_PER_1000

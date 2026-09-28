@@ -53,14 +53,19 @@ export default function App() {
 
   const refreshScans = useCallback(() => api.get('/scans').then((list) => { setScans(list); return list; }), []);
 
-  useEffect(() => {
-    api.get('/meta').then(setMeta).catch((e) => setServerError(e.message));
+  const loadInitialData = useCallback(() => {
+    setServerError(null);
+    api.get('/meta').then((m) => { setMeta(m); setServerError(null); }).catch((e) => setServerError(e.message));
     api.get('/settings').then((s) => setSettings(mergeSettings(s))).catch(() => {});
     refreshScans().then((list) => {
       const pick = list.find((s) => s.active) || list[0];
       if (pick) { setScanId(pick.id); if (!INITIAL_VIEW) setView(pick.active ? 'scanner' : 'leads'); }
     }).catch(() => {});
   }, [refreshScans]);
+
+  useEffect(() => {
+    loadInitialData();
+  }, [loadInitialData]);
 
   useEffect(() => {
     if (!scanId) { setScan(null); return; }
@@ -154,9 +159,21 @@ export default function App() {
           <span className={`conn ${live ? 'ok' : ''}`} />{live ? 'Live connection' : 'Connecting to server…'}
         </div>
       </aside>
-
       <main className="main">
-        {serverError && <div className="banner error">Cannot reach the API server ({serverError}). Start everything with <code>npm run dev</code>.</div>}
+        {serverError && (
+          <div className="banner error flex items-center justify-between gap-3">
+            <div>
+              Cannot reach the API server ({serverError}).
+              <span className="opacity-80 ml-1">If Render is waking up from sleep, this can take 30–50 seconds.</span>
+            </div>
+            <button
+              onClick={loadInitialData}
+              className="ml-auto px-3 py-1 bg-white/20 hover:bg-white/30 text-white rounded text-xs font-semibold cursor-pointer shrink-0"
+            >
+              Retry Connection
+            </button>
+          </div>
+        )}
         {view === 'configure' && <SearchConfig meta={meta} scans={scans} onStarted={onStarted} notify={notify} />}
         {view === 'scanner' && (
           <LiveScanner scan={scan} scans={scans} apiFeed={apiFeed} leadsVersion={leadsVersion} onAction={scanAction}
