@@ -9,11 +9,10 @@ const DEFAULTS = {
   targetCount: 100, targetMode: 'discovered', maxApiCalls: 150,
 };
 
-// Rough requests needed: ~10 businesses per billed request once dense areas are split (duplicates included);
-// qualified targets need more because only some businesses score Hot or Potential.
-const neededFor = (f) => Math.max(3, Math.ceil((Number(f.targetCount) || 0) / (f.targetMode === 'qualified' ? 4 : 10)));
-// Auto-filled budget: 50% headroom over the estimate. A scan stops once it hits its target, so unused budget is not spent.
-const budgetFor = (f) => Math.min(10000, Math.ceil(neededFor(f) * 1.5));
+// Rough requests needed: ~5-6 businesses per billed request with quadtree expansion & geographic variance.
+const neededFor = (f) => Math.max(5, Math.ceil((Number(f.targetCount) || 0) / (f.targetMode === 'qualified' ? 3 : 5)));
+// Auto-filled budget: 60% headroom over the estimate. A scan stops once it hits its target, so unused budget is not spent.
+const budgetFor = (f) => Math.min(10000, Math.ceil(neededFor(f) * 1.6));
 
 const areaKm = (b) => b && {
   w: Math.abs(b.east - b.west) * 111.32 * Math.cos((((b.north + b.south) / 2) * Math.PI) / 180),
@@ -65,7 +64,7 @@ export default function SearchConfig({ meta, scans, onStarted, notify }) {
   const { radiusKm: _legacyRadius, area: _legacyArea, ...fields } = form; // old saved forms may still carry these
   // A typed-but-not-added place still counts, so nobody loses it by forgetting to press Enter.
   const areas = [...new Set([...(form.areas || []), draft.trim()].filter(Boolean))];
-  const payload = { ...fields, areas, categoryId: match?.id || null, customCategory: match ? '' : typed };
+  const payload = { ...fields, areas, categoryId: match?.id || null, customCategory: match ? '' : typed, strict: form.strict !== false };
   const running = scans.find((s) => s.active);
   const needed = neededFor(form);
   const km = areaKm(bounds);
@@ -161,10 +160,29 @@ export default function SearchConfig({ meta, scans, onStarted, notify }) {
             <input value={form.keywords} onChange={set('keywords')} placeholder="e.g. specialty coffee, family" />
           </label>
 
-          <p className="hint">
-            <b>Strict category match is always on</b> — only businesses whose name or Google category contains “{typed || 'the category'}” are kept.
-            e.g. Honey shops keeps “Al Jahwari Honey” and “عسل الجبل”, and skips supermarkets and cafés Google adds as loose matches.
-          </p>
+          <div className="field">
+            <span>Category match mode <em>how search results are filtered</em></span>
+            <div className="flex flex-wrap gap-4 pt-1">
+              <label className="flex items-center gap-2 cursor-pointer text-sm">
+                <input
+                  type="radio"
+                  name="match_mode"
+                  checked={form.strict !== false}
+                  onChange={() => setForm((f) => ({ ...f, strict: true }))}
+                />
+                <span className="text-ink"><b>Smart Strict</b> (includes industry synonyms & Arabic, drops unrelated shops)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer text-sm">
+                <input
+                  type="radio"
+                  name="match_mode"
+                  checked={form.strict === false}
+                  onChange={() => setForm((f) => ({ ...f, strict: false }))}
+                />
+                <span className="text-ink"><b>Broad Match</b> (keeps 100% of places Google returns for this search)</span>
+              </label>
+            </div>
+          </div>
 
           <div className="field-row">
             <label className="field">

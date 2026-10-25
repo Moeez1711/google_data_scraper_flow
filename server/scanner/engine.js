@@ -75,8 +75,8 @@ function normalizeInput(body = {}) {
     country, countryName: countryName(country), area, areas,
     categoryId: cat?.id || null, categoryLabel: cat?.label || custom, categoryValue: cat?.value || 'medium',
     keywords, textQuery: [categoryQuery, keywords].filter(Boolean).join(' '),
-    // Always strict: keep only places whose name/category actually contains the searched category (see match.js).
-    strict: true, matchQuery: categoryQuery,
+    // Smart strict by default; broad match if explicitly disabled
+    strict: body.strict !== false, matchQuery: categoryQuery,
     targetCount: clamp(body.targetCount, 1, 5000, lim.defaultTargetCount),
     targetMode: body.targetMode === 'qualified' ? 'qualified' : 'discovered',
     maxApiCalls: clamp(body.maxApiCalls, 1, 10000, lim.defaultScanBudget),
@@ -220,7 +220,7 @@ function emitProgress(id, force = false) {
 async function runScan(id, ctl) {
   const { config: cfg } = getScan(id);
   const source = getSource(cfg.source);
-  const terms = cfg.strict ? matchTerms(cfg.matchQuery) : null;
+  const terms = cfg.strict ? matchTerms(cfg.matchQuery, cfg.categoryId) : null;
   const { signal } = ctl.controller;
   let finishReason = null;
   let fatal = null;
@@ -242,11 +242,38 @@ async function runScan(id, ctl) {
     while (!halted()) {
       checkLimits();
       if (halted()) break;
-      const tile = claimTile(id);
+      let tile = claimTile(id);
       if (!tile) {
-        if (repo.scanStats(id).tilesActive === 0) { finishReason ||= 'Whole area scanned'; break; }
-        await sleep(250, signal);
-        continue;
+        const s = repo.scanStats(id);
+        if (s.tilesActive === 0) {
+          const count = cfg.targetMode === 'qualified' ? s.qualified : s.discovered;
+          if (count < cfg.targetCount && s.billedCalls < cfg.maxApiCalls) {
+            // Find an unsplit completed tile with results to keep expanding towards the target
+            const candidate = db.prepare(`
+              SELECT t.* FROM tiles t
+              WHERE t.scan_id=? AND t.status='done' AND t.results > 0 AND t.depth < ?
+              AND ((t.north - t.south) * 110.574 / 2) >= ?
+              AND NOT EXISTS (
+                SELECT 1 FROM tiles c 
+                WHERE c.scan_id=t.scan_id AND c.depth = t.depth + 1 
+                AND c.south >= t.south AND c.north <= t.north 
+                AND c.west >= t.west AND c.east <= t.east
+              )
+              ORDER BY t.results DESC, t.depth ASC LIMIT 1
+            `).get(id, MAX_DEPTH, MIN_TILE_KM);
+            if (candidate && splitTile(id, candidate, cfg.country)) {
+              log(id, 'info', `Auto-expanding tile ${candidate.id} (depth ${candidate.depth}, ${candidate.results} results) to reach target of ${cfg.targetCount} leads`);
+              tile = claimTile(id);
+            }
+          }
+          if (!tile) {
+            finishReason ||= 'Whole area scanned';
+            break;
+          }
+        } else {
+          await sleep(250, signal);
+          continue;
+        }
       }
       // Tiles outside the country's border (queued before border checks, or a custom-drawn area) cost nothing: skip them.
       if (!rectTouchesCountry(tile, cfg.country)) {
@@ -265,12 +292,28 @@ async function runScan(id, ctl) {
           for (const p of res.places) {
             // The scan rectangle spills into neighbouring countries (Oman's box covers the UAE); keep only the chosen country.
             if (p.countryCode && p.countryCode !== cfg.country) { outside++; continue; }
-            if (terms && !matchesPlace(p, terms)) { offTopic++; continue; }
+            if (terms && !matchesPlace(p, terms, { categoryId: cfg.categoryId, strict: cfg.strict })) { offTopic++; continue; }
             const r = repo.upsertPlace(p, { scanId: id, countryCode: cfg.country, categoryValue: cfg.categoryValue });
             if (r.linked) fresh++; else dup++;
           }
-          // A tile whose results were all abroad isn't worth subdividing — it would spend budget on another country.
-          if (res.saturated && outside < res.places.length) split = splitTile(id, tile, cfg.country);
+          const heightKm = (tile.north - tile.south) * 110.574;
+          const countNow = cfg.targetMode === 'qualified' ? repo.scanStats(id).qualified : repo.scanStats(id).discovered;
+          const underTarget = countNow < cfg.targetCount;
+          const hasValidPlaces = outside < res.places.length && res.places.length > 0;
+
+          if (hasValidPlaces) {
+            if (res.saturated) {
+              split = splitTile(id, tile, cfg.country);
+            } else if (underTarget) {
+              if (res.places.length >= 10 && heightKm >= 0.8) {
+                split = splitTile(id, tile, cfg.country);
+              } else if (res.pages >= 2 && heightKm >= 0.6) {
+                split = splitTile(id, tile, cfg.country);
+              } else if (tile.depth <= 2 && res.places.length >= 2 && heightKm >= 2.0) {
+                split = splitTile(id, tile, cfg.country);
+              }
+            }
+          }
           db.prepare(`UPDATE tiles SET status='done', pages=?, results=?, error=NULL WHERE id=?`).run(res.pages, res.places.length, tile.id);
         });
         dupTotal += dup;

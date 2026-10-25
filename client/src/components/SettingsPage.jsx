@@ -40,16 +40,28 @@ export default function SettingsPage({ notify }) {
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  const load = () => api.get('/limits').then((u) => { setData(u); setDraft(u.limits); });
-  useEffect(() => { load().catch((e) => notify(e.message, 'error')); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const load = () => api.get('/limits').then((u) => {
+    setData(u);
+    setDraft((prev) => (prev ? prev : u.limits));
+  });
+
+  useEffect(() => {
+    load().catch((e) => notify(e.message, 'error'));
+    // Live refresh every 4s to track in-flight requests and quota
+    const timer = setInterval(() => {
+      api.get('/limits').then(setData).catch(() => {});
+    }, 4000);
+    return () => clearInterval(timer);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!data || !draft) return <div className="loading">Loading…</div>;
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(data.limits);
   const set = (k) => (e) => setDraft({ ...draft, [k]: e.target.value === '' ? '' : Number(e.target.value) });
   const costAt = (limit) => (Number(limit) > 0 ? (Math.max(0, Number(limit) - Number(draft.freeSearchesPerMonth || 0)) * Number(draft.costPer1000 || 0)) / 1000 : null);
-  const { searches: s, limits: l, remaining } = data;
+  const { searches: s, limits: l, remaining, pending = {}, available = {} } = data;
   const worst = costAt(draft.monthlySearchLimit);
+  const activeScan = pending.activeScan;
 
   async function save() {
     setSaving(true);
@@ -63,12 +75,105 @@ export default function SettingsPage({ notify }) {
 
   return (
     <div className="page">
-      <PageHead eyebrow="07 · Settings" title="Usage limits & cost control">
-        <button className="btn ghost" onClick={() => load()}>Refresh usage</button>
-        <button className="btn ghost" disabled={!dirty} onClick={() => setDraft(data.limits)}>Discard</button>
-        <button className="btn primary" disabled={!dirty || saving} onClick={save}>{saving ? 'Saving…' : 'Save limits'}</button>
+      <PageHead eyebrow="07 · Settings" title="Usage limits & request capacity">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-good/10 px-2.5 py-1 text-xs font-semibold text-good">
+            <span className="h-2 w-2 rounded-full bg-good animate-pulse" />
+            Live metrics
+          </span>
+          <button className="btn ghost" onClick={() => load()}>Refresh</button>
+          <button className="btn ghost" disabled={!dirty} onClick={() => setDraft(data.limits)}>Discard</button>
+          <button className="btn primary" disabled={!dirty || saving} onClick={save}>{saving ? 'Saving…' : 'Save limits'}</button>
+        </div>
       </PageHead>
 
+      {/* Live Capacity & Pending Requests Overview */}
+      <section className="card flex flex-col gap-4">
+        <div className="card-head !mb-0">
+          <div>
+            <h3 className="text-base font-bold text-ink">Live Queue & Usable Capacity</h3>
+            <p className="text-xs text-muted">Real-time status of pending requests and available quota</p>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Card 1: Pending Requests */}
+          <div className="flex flex-col gap-1 rounded-[10px] border border-line bg-panel-2 p-3.5">
+            <span className="text-xs font-semibold text-muted">Pending Requests</span>
+            <div className="flex items-baseline gap-2">
+              <strong className={`text-2xl font-[650] tabular-nums ${(pending.activeScanTilesPending || pending.totalPendingTiles || 0) > 0 ? 'text-accent' : 'text-ink'}`}>
+                {fmt.num(pending.activeScanTilesPending || pending.totalPendingTiles || 0)}
+              </strong>
+              <span className="text-xs text-muted">tile searches</span>
+            </div>
+            <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted">
+              <span><b>{pending.tilesActive || 0}</b> in flight · <b>{pending.sitesPending || 0}</b> websites queued</span>
+              {activeScan && (
+                <span className="text-ink-2">Scan #{activeScan.id}: {activeScan.remainingBudget} budget calls left</span>
+              )}
+            </div>
+          </div>
+
+          {/* Card 2: What You Can Use Today */}
+          <div className="flex flex-col gap-1 rounded-[10px] border border-line bg-panel-2 p-3.5">
+            <span className="text-xs font-semibold text-muted">Can Use Today</span>
+            <div className="flex items-baseline gap-2">
+              <strong className="text-2xl font-[650] tabular-nums text-good">
+                {available.canUseToday != null ? fmt.num(available.canUseToday) : 'Unlimited'}
+              </strong>
+              {available.canUseToday != null && <span className="text-xs text-muted">searches left</span>}
+            </div>
+            <small className="mt-1 text-xs text-muted">
+              {l.dailySearchLimit > 0
+                ? `${fmt.num(s.today)} used of ${fmt.num(l.dailySearchLimit)} daily limit`
+                : 'No daily limit set (unbounded today)'}
+            </small>
+          </div>
+
+          {/* Card 3: What You Can Use This Month */}
+          <div className="flex flex-col gap-1 rounded-[10px] border border-line bg-panel-2 p-3.5">
+            <span className="text-xs font-semibold text-muted">Can Use This Month</span>
+            <div className="flex items-baseline gap-2">
+              <strong className="text-2xl font-[650] tabular-nums text-good">
+                {available.canUseThisMonth != null ? fmt.num(available.canUseThisMonth) : 'Unlimited'}
+              </strong>
+              {available.canUseThisMonth != null && <span className="text-xs text-muted">searches left</span>}
+            </div>
+            <small className="mt-1 text-xs text-muted">
+              {fmt.num(data.freeLeftThisMonth)} free tier searches remaining
+            </small>
+          </div>
+
+          {/* Card 4: Throughput & Concurrency */}
+          <div className="flex flex-col gap-1 rounded-[10px] border border-line bg-panel-2 p-3.5">
+            <span className="text-xs font-semibold text-muted">API Speed & Workers</span>
+            <div className="flex items-baseline gap-2">
+              <strong className="text-2xl font-[650] tabular-nums text-ink">
+                {available.rateLimitRps || 5} req/sec
+              </strong>
+            </div>
+            <small className="mt-1 text-xs text-muted">
+              {available.websiteConcurrency || 4} parallel website checks · {draft.cacheHours || 72}h cache
+            </small>
+          </div>
+        </div>
+
+        {activeScan && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-xs text-ink-2">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-accent animate-ping" />
+              <span><b>Active Scan #{activeScan.id}:</b> {activeScan.categoryLabel} in {activeScan.area}</span>
+            </div>
+            <div className="flex items-center gap-4">
+              <span>Leads: <b>{fmt.num(activeScan.discovered)}</b> / {fmt.num(activeScan.targetCount)} target</span>
+              <span>API Budget: <b>{fmt.num(activeScan.billedCalls)}</b> / {fmt.num(activeScan.maxApiCalls)} ({activeScan.remainingBudget} left)</span>
+              <span>Pending tiles: <b>{fmt.num(activeScan.tilesPending)}</b></span>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Usage Meters and Google Cost */}
       <section className="card grid gap-6 md:grid-cols-3">
         <Meter label="Business searches this month" value={s.month} max={l.monthlySearchLimit || Math.max(s.month, l.freeSearchesPerMonth)}
           tone={l.monthlySearchLimit && s.month >= l.monthlySearchLimit * 0.85 ? 'warn' : 'accent'}
@@ -83,6 +188,7 @@ export default function SettingsPage({ notify }) {
         </div>
       </section>
 
+      {/* Presets */}
       <section className="card flex flex-wrap items-center gap-2">
         <span className="mr-1 text-sm font-semibold text-ink-2">Presets</span>
         {PRESETS.map(([label, values]) => {
@@ -99,6 +205,7 @@ export default function SettingsPage({ notify }) {
         </span>
       </section>
 
+      {/* Configuration Inputs */}
       <div className="grid items-start gap-4 xl:grid-cols-2">
         <section className="card flex flex-col gap-4">
           <div className="card-head !mb-0"><h3>Limits</h3>{dirty && <span className="text-xs font-semibold text-pot">Unsaved changes</span>}</div>

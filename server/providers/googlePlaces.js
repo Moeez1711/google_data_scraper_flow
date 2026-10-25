@@ -163,8 +163,12 @@ export async function searchArea({ textQuery, bounds, regionCode, languageCode =
     for (const p of data.places || []) places.push(normalize(p));
     pageToken = data.nextPageToken;
   } while (pageToken && pages < MAX_PAGES && !ctx.signal?.aborted);
-  // Hitting the 3rd page means Google likely has more here than it will return: subdivide.
-  return { places, pages, saturated: pages >= MAX_PAGES && places.length > 2 * PAGE_SIZE };
+  // Saturated if hit max pages, or returned 35+ places, or has nextPageToken cut off by MAX_PAGES
+  const saturated = (pages >= MAX_PAGES && places.length >= 2 * PAGE_SIZE)
+    || (pages >= 2 && places.length >= 35)
+    || (Boolean(pageToken) && pages >= MAX_PAGES)
+    || places.length >= 50;
+  return { places, pages, saturated };
 }
 
 export const googlePlacesSource = { id: 'google_places', resolveArea, searchArea, estimatedCostPer1000: config.placesCostPer1000 };

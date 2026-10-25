@@ -12,13 +12,42 @@ import SettingsPage from './components/SettingsPage.jsx';
 import { mergeSettings } from './lib/outreach.js';
 
 const NAV = [
-  ['configure', '01', 'Search Configuration'],
-  ['scanner', '02', 'Live Scanner'],
-  ['leads', '03', 'Lead Results'],
-  ['analytics', '04', 'Analytics'],
-  ['export', '05', 'Export'],
-  ['outreach', '06', 'Outreach'],
-  ['settings', '07', 'Settings'],
+  ['configure', '01', 'Search Setup', (
+    <svg className="size-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+    </svg>
+  )],
+  ['scanner', '02', 'Live Scanner', (
+    <svg className="size-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+    </svg>
+  )],
+  ['leads', '03', 'Lead Results', (
+    <svg className="size-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+    </svg>
+  )],
+  ['analytics', '04', 'Analytics', (
+    <svg className="size-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+    </svg>
+  )],
+  ['export', '05', 'Export', (
+    <svg className="size-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+    </svg>
+  )],
+  ['outreach', '06', 'Outreach', (
+    <svg className="size-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+    </svg>
+  )],
+  ['settings', '07', 'Settings & Quota', (
+    <svg className="size-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  )],
 ];
 const INITIAL_VIEW = NAV.some(([id]) => id === window.location.hash.slice(1)) ? window.location.hash.slice(1) : null;
 
@@ -133,30 +162,48 @@ export default function App() {
     <div className="shell">
       <aside className="rail">
         <div className="brand">
-          <span className="brand-mark">◎</span>
-          <div><b>Lead Scout</b><small>Local sales intelligence</small></div>
+          <div className="brand-mark bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-600 shadow-md shadow-emerald-500/25">
+            <svg className="size-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 3v6m0 6v6M3 12h6m6 0h6" strokeLinecap="round" />
+            </svg>
+          </div>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <b className="text-[15px] font-bold text-white tracking-tight">Lead Scout</b>
+              <span className="rounded bg-gradient-to-r from-emerald-500 to-teal-500 px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase text-white shadow-2xs">SaaS</span>
+            </div>
+            <small className="text-[11px] text-slate-400">Local Intelligence</small>
+          </div>
         </div>
         <nav>
-          {NAV.map(([id, n, label]) => (
-            <button key={id} className={view === id ? 'on' : ''} onClick={() => setView(id)}>
-              <span className="nav-n">{n}</span>{label}
-              {id === 'scanner' && scan?.active && <span className="pulse" />}
+          {NAV.map(([id, n, label, icon]) => (
+            <button key={id} className={`group ${view === id ? 'on' : ''}`} onClick={() => setView(id)}>
+              <span className={`transition-colors ${view === id ? 'text-emerald-400' : 'text-slate-400 group-hover:text-slate-200'}`}>
+                {icon}
+              </span>
+              <span className="grow font-medium">{label}</span>
+              <span className="nav-n">{n}</span>
+              {id === 'scanner' && scan?.active && <span className="pulse ml-1" />}
               {id === 'leads' && followUps.due > 0 && (
-                <span className="ml-auto rounded-full bg-hot px-1.5 text-[11px] leading-[18px] font-bold text-white" title="Follow-ups due today">{followUps.due}</span>
+                <span className="ml-1 rounded-full bg-rose-500 px-1.5 text-[10px] leading-[17px] font-bold text-white shadow-sm" title="Follow-ups due today">{followUps.due}</span>
               )}
             </button>
           ))}
         </nav>
         {scan && (
           <button className="rail-scan" onClick={() => setView('scanner')}>
-            <small>Scan #{scan.id}</small>
-            <b>{scan.config.categoryLabel}</b>
-            <span>{scan.config.area}, {scan.config.country}</span>
-            <StatusChip status={scan.active ? 'running' : scan.status} />
+            <div className="flex items-center justify-between gap-1">
+              <small className="font-mono text-[11px] text-emerald-400/90 font-semibold">Active Scan #{scan.id}</small>
+              <StatusChip status={scan.active ? 'running' : scan.status} />
+            </div>
+            <b className="text-white text-xs font-semibold truncate">{scan.config.categoryLabel}</b>
+            <span className="text-[11.5px] text-slate-400 truncate">{scan.config.area}, {scan.config.country}</span>
           </button>
         )}
         <div className="rail-foot">
-          <span className={`conn ${live ? 'ok' : ''}`} />{live ? 'Live connection' : 'Connecting to server…'}
+          <span className={`conn ${live ? 'ok' : ''}`} />
+          <span className="text-[11.5px] font-medium">{live ? 'Live Engine Active' : 'Connecting to API…'}</span>
         </div>
       </aside>
       <main className="main">

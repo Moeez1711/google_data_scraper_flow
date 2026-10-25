@@ -3,7 +3,7 @@
  * Limits are stored in the settings table and enforced in the provider before every non-cached search.
  */
 import { config } from './config.js';
-import { db } from './db.js';
+import { db, json } from './db.js';
 import { getSettings, saveSettings } from './repo.js';
 
 export const LIMIT_DEFAULTS = {
@@ -39,18 +39,65 @@ export function saveLimits(input = {}) {
 const startOfDay = () => new Date().setHours(0, 0, 0, 0);
 const startOfMonth = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).getTime(); };
 const countStmt = db.prepare(`SELECT COUNT(*) n FROM api_calls WHERE provider='google_places' AND endpoint=? AND outcome='ok' AND ts >= ?`);
+const activeScanStmt = db.prepare(`SELECT id, config, stats FROM scans WHERE status='running' ORDER BY id DESC LIMIT 1`);
+const pendingTilesScanStmt = db.prepare(`SELECT COUNT(*) n FROM tiles WHERE scan_id=? AND status='pending'`);
+const totalPendingTilesStmt = db.prepare(`SELECT COUNT(*) n FROM tiles WHERE status='pending'`);
+const totalActiveTilesStmt = db.prepare(`SELECT COUNT(*) n FROM tiles WHERE status='active'`);
+const pendingSitesStmt = db.prepare(`SELECT COUNT(*) n FROM businesses WHERE site_status IN ('pending', 'analyzing')`);
 
 export function usage() {
   const limits = getLimits();
   const month = countStmt.get('searchText', startOfMonth()).n;
   const today = countStmt.get('searchText', startOfDay()).n;
   const left = (limit, used) => (limit > 0 ? Math.max(0, limit - used) : null);
+
+  const activeRow = activeScanStmt.get();
+  let activeScan = null;
+  let activeScanTilesPending = 0;
+  if (activeRow) {
+    const cfg = json(activeRow.config, {});
+    const stats = json(activeRow.stats, {});
+    activeScanTilesPending = pendingTilesScanStmt.get(activeRow.id).n;
+    activeScan = {
+      id: activeRow.id,
+      categoryLabel: cfg.categoryLabel || cfg.textQuery || 'Scan',
+      area: cfg.area || '',
+      targetCount: cfg.targetCount || 0,
+      targetMode: cfg.targetMode || 'discovered',
+      discovered: stats.discovered || 0,
+      qualified: stats.qualified || 0,
+      billedCalls: stats.billedCalls || 0,
+      maxApiCalls: cfg.maxApiCalls || 0,
+      remainingBudget: Math.max(0, (cfg.maxApiCalls || 0) - (stats.billedCalls || 0)),
+      tilesPending: activeScanTilesPending,
+    };
+  }
+
+  const sitesPending = pendingSitesStmt.get().n;
+  const totalPendingTiles = totalPendingTilesStmt.get().n;
+  const tilesActive = totalActiveTilesStmt.get().n;
+
   return {
     limits,
     searches: { today, month, areaLookupsMonth: countStmt.get('resolveArea', startOfMonth()).n },
     remaining: { today: left(limits.dailySearchLimit, today), month: left(limits.monthlySearchLimit, month) },
     freeLeftThisMonth: Math.max(0, limits.freeSearchesPerMonth - month),
     estMonthCostUsd: Math.round(Math.max(0, month - limits.freeSearchesPerMonth) * limits.costPer1000) / 1000,
+    pending: {
+      activeScanTilesPending,
+      totalPendingTiles,
+      tilesActive,
+      sitesPending,
+      activeScan,
+    },
+    available: {
+      canUseToday: left(limits.dailySearchLimit, today),
+      canUseThisMonth: left(limits.monthlySearchLimit, month),
+      freeTierRemaining: Math.max(0, limits.freeSearchesPerMonth - month),
+      rateLimitRps: config.placesRps,
+      websiteConcurrency: config.websiteConcurrency,
+      cacheTtlHours: limits.cacheHours,
+    },
   };
 }
 
